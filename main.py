@@ -1,59 +1,52 @@
-import re
 import argparse
-import io
+import subprocess
 
-def convert_cpp_to_html(input_text):
-    custom_tag_pattern = re.compile(r'(\w+)<\s*\'([^\']*)\<\s*(.*?)\s*\>\>')
+def tokenize(input_string):
+    input_string = input_string.replace('\n', '')  
+    tokens = []
+    buffer = ""
 
-    def parse_properties(properties_str):
-        print("parse_properties called")
-        properties = re.findall(r'(\w+)=([^"\s]*)', properties_str)
-        formatted_properties = ' '.join([f'{prop}="{value}"' for prop, value in properties])
-        return formatted_properties
+    i = 0
+    while i < len(input_string):
+        if input_string[i:i+2] in ("<<", ">>"):
+            if buffer:
+                tokens.append(buffer.strip())
+                buffer = ""
+            tokens.append(input_string[i:i+2])
+            i += 2
+        elif input_string[i] == '<':
+            j = i + 1
+            while j < len(input_string) and input_string[j] != '>':
+                if input_string[j] == '<':
+                    nested_tag = tokenize(input_string[j:])
+                    tokens.extend(nested_tag)
+                    i = j + len(''.join(nested_tag))  
+                    break
+                j += 1
+            if j < len(input_string) and input_string[j] == '>':
+                tokens.append(input_string[i:j + 1])
+                i = j + 1
+            else:
+                tokens.append(input_string[i:])
+                break
+        else:
+            buffer += input_string[i]
+            i += 1
+    
+    if buffer:
+        tokens.append(buffer.strip())
 
-    def parse_content(content):
-        print("parse_content called")
-        output = []
-        pos = 0
-        while pos < len(content):
-            custom_match = custom_tag_pattern.match(content, pos)
-            if custom_match:
-                tag = custom_match.group(1)
-                properties_content = custom_match.group(2).strip()
-                inner_content = custom_match.group(3).strip()
-                properties = parse_properties(properties_content)
+    return tokens
 
-                output.append(f'<{tag} {properties}>{parse_content(inner_content)}</{tag}>')
-                pos = custom_match.end()
-                continue
+def convert_custom_html_to_html(input_string):
+    tokens = tokenize(input_string)
+    html = ''.join(tokens)
+    return html
 
-            pos += 1  # Move to next character if no match
 
-        if not output:
-            output.append(content.strip())
-
-        return ''.join(output)
-
-    output = []
-    lines = input_text.splitlines()
-    print("lines:", lines)
-    for line in lines:
-        # Check for custom tag
-        custom_match = custom_tag_pattern.match(line)
-        if custom_match:
-            tag = custom_match.group(1)
-            properties_content = custom_match.group(2).strip()
-            inner_content = custom_match.group(3).strip()
-            properties = parse_properties(properties_content)
-
-            output.append(f'<{tag} {properties}>{parse_content(inner_content)}</{tag}>')
-
-    return '\n'.join(output)
 
 def main():
-    print("Script started")
-    
-    parser = argparse.ArgumentParser(description='Convert CPP-like code snippets to HTML-like snippets.')
+    parser = argparse.ArgumentParser(description='Convert custom CPP-like syntax to standard HTML and format it.')
     parser.add_argument('input_file', type=str, help='Path to the input file')
     parser.add_argument('output_file', type=str, help='Path to the output file')
 
@@ -66,18 +59,11 @@ def main():
         print("Input text:")
         print(input_text)
 
-    converted_text = convert_cpp_to_html(input_text)
-
-    output_buffer = io.StringIO()
-    output_buffer.write(converted_text)
+    converted_html = convert_custom_html_to_html(input_text)
+    formatted_html = converted_html
 
     with open(args.output_file, 'w') as f:
-        f.write(output_buffer.getvalue())
-
-    print("Output:")
-    print(converted_text)
-    print(f'Conversion complete. Output written to {args.output_file}')
-    print("Script finished")
+        f.write(formatted_html)
 
 if __name__ == '__main__':
     main()
